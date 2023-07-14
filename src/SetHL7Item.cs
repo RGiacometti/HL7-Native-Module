@@ -9,6 +9,7 @@
  * 
  * Notes:       Implements the cmdlet to update the value of a specific item from a HL7 v2 message.
  * 
+ *  rrr
  */
 
 namespace HL7Tools
@@ -16,14 +17,11 @@ namespace HL7Tools
     using System;
     using System.Collections.Generic;
     using System.IO;
-	using System.Text;
+    using System.Text;
     using System.Linq;
-    using System.Management.Automation;
+    using System.Diagnostics;
 
-    // CmdLet: Update-HL7Item
-    // Replaces the value of a specific item from the message 
-    [Cmdlet(VerbsCommon.Set, "HL7Item", SupportsShouldProcess = true)]
-    public class SetHL7Item : PSCmdlet
+    public class SetHL7Item
     {
         private string itemPosition;
         private string[] paths;
@@ -33,34 +31,16 @@ namespace HL7Tools
         private string newValue;
         private bool allrepeats = false;
         private bool appendValue = false;
-		private string encoding = "UTF-8";
+        private string encoding = "UTF-8";
 
-        // Parameter set for the -Path and -LiteralPath parameters. A parameter set ensures these options are mutually exclusive.
-        // A LiteralPath is used in situations where the filename actually contains wild card characters (eg File[1-10].txt) and you want
-        // to use the literaral file name instead of treating it as a wildcard search.
-        [Parameter(
-            Mandatory = true,
-            ValueFromPipeline = true,
-            ValueFromPipelineByPropertyName = true,
-            ParameterSetName = "Literal")
-        ]
-        [Alias("PSPath", "Name", "Filename", "Fullname")]
-        [ValidateNotNullOrEmpty]
+        List<SetHL7ItemResult> result;
+
         public string[] LiteralPath
         {
             get { return this.paths; }
             set { this.paths = value; }
         }
 
-        [Parameter(
-            Position = 0,
-            Mandatory = true,
-            ValueFromPipeline = true,
-            ValueFromPipelineByPropertyName = true,
-            ParameterSetName = "Path")
-
-        ]
-        [ValidateNotNullOrEmpty]
         public string[] Path
         {
             get { return this.paths; }
@@ -71,239 +51,205 @@ namespace HL7Tools
             }
         }
 
-        //  A parameter for position of the item to return
-        [Parameter(
-            Mandatory = true,
-            Position = 1,
-            HelpMessage = "Position of the item to return, e.g. PID-3.1"
-        )]
-        [Alias("Item")]
         public string ItemPosition
         {
             get { return this.itemPosition; }
             set { this.itemPosition = value; }
         }
 
-        // Parameter to supply the value of the item to be changed to
-        [Parameter(
-            Mandatory = true,
-            Position = 2,
-            HelpMessage = "New value")]
         public string Value
         {
             get { return this.newValue; }
             set { this.newValue = value; }
         }
 
-        // Parameter to optionally filter the messages based on matching message contents
-        [Parameter(
-            Mandatory = false,
-            Position = 3,
-            HelpMessage = "Filter on message contents")]
         public string[] Filter
         {
             get { return this.filter; }
             set { this.filter = value; }
         }
 
-        // Parameter to specify the message character encoding format
-        [Parameter(
-            Mandatory = false,
-            Position = 4,
-            HelpMessage = "Text encoding ('UTF-8' | 'ISO-8859-1'")]
-        [ValidateSet("UTF-8", "ISO-8859-1")]
         public string Encoding
         {
             get { return this.encoding; }
             set { this.encoding = value; }
         }
 
-        // Update all repeating values for the specified element
-        [Parameter(
-            Mandatory = false,
-            HelpMessage = "Update all repeats of an item"
-         )]
-        public SwitchParameter UpdateAllRepeats
-        {
-            get { return this.allrepeats; }
-            set { this.allrepeats = value; }
-        }
-
-        // Append the user supplied value to the existing item value
-        [Parameter(
-            Mandatory = false,
-            HelpMessage = "Append the value supplied to the existing value"
-         )]
-        [Alias("Append")]
-        public SwitchParameter AppendToExistingValue
-        {
-            get { return this.appendValue; }
-            set { this.appendValue = value; }
-        }
-
-
         /// <summary>
         /// get the HL7 item provided via the cmdlet parameter HL7ItemPosition
         /// </summary>
-        protected override void ProcessRecord()
+        protected void ProcessRecord()
         {
             // confirm the item location parameter is valid before processing any files
-            if (!Common.IsHL7LocationStringValid(this.itemPosition)) {
-                ArgumentException ex = new ArgumentException(this.itemPosition + " does not appear to be a valid HL7 item");
-                ErrorRecord error = new ErrorRecord(ex, "InvalidElement", ErrorCategory.InvalidArgument, this.itemPosition);
-                this.WriteError(error);
-                return;
+            if (!Common.IsHL7LocationStringValid(this.itemPosition))
+            {
+                throw new FileNotFoundException();
             }
 
             // confirm the filter parameter is valid before processing any files
-            foreach (string currentFilter in this.filter) {
+            foreach (string currentFilter in this.filter)
+            {
                 // confirm each filter is formatted correctly
-                if (!Common.IsFilterValid(currentFilter)) {
-                    ArgumentException ex = new ArgumentException(currentFilter + " does not appear to be a valid filter");
-                    ErrorRecord error = new ErrorRecord(ex, "InvalidFilter", ErrorCategory.InvalidArgument, currentFilter);
-                    this.WriteError(error);
-                    return;
+                if (!Common.IsFilterValid(currentFilter))
+                {
+                    throw new ArgumentException();
                 }
             }
 
-			// set the text encoding
+            // set the text encoding
             Encoding encoder = System.Text.Encoding.GetEncoding(this.encoding);
-            WriteVerbose("Encoding: " + encoder.EncodingName);
+            Debug.WriteLine("Encoding: " + encoder.EncodingName);
 
             // expand the file or directory information provided in the -Path or -LiteralPath parameters
-            foreach (string path in paths) {
+            foreach (string path in paths)
+            {
+                /*
                 // This will hold information about the provider containing the items that this path string might resolve to.                
                 ProviderInfo provider;
 
                 // This will be used by the method that processes literal paths
                 PSDriveInfo drive;
+                */
 
                 // this contains the paths to process for this iteration of the loop to resolve and optionally expand wildcards.
                 List<string> filePaths = new List<string>();
 
                 // if the path provided is a directory, expand the files in the directy and add these to the list.
-                if (Directory.Exists(path)) {
+                if (Directory.Exists(path))
+                {
                     filePaths.AddRange(Directory.GetFiles(path));
                 }
 
                 // not a directory, could be a wildcard or literal filepath 
-                else {
+                else
+                {
                     // expand wildcards. This assumes if the user listed a directory it is literal
-                    if (expandWildcards) {
+                    if (expandWildcards)
+                    {
                         // Turn *.txt into foo.txt,foo2.txt etc. If path is just "foo.txt," it will return unchanged. If the filepath expands into a directory ignore it.
-                        foreach (string expandedFilePath in this.GetResolvedProviderPathFromPSPath(path, out provider)) {
-                            if (!Directory.Exists(expandedFilePath)) {
-                                filePaths.Add(expandedFilePath);
-                            }
+                        string filesDir = Path.GetDirectoryName(path) ?? throw new DirectoryNotFoundException();
+                        if (Directory.Exists(filesDir))
+                        {
+                            filePaths.AddRange(Directory.GetFiles(filesDir, Path.GetFileName(path)));
                         }
                     }
-                    else {
+                    else
+                    {
                         // no wildcards, so don't try to expand any * or ? symbols.                    
-                        filePaths.Add(this.SessionState.Path.GetUnresolvedProviderPathFromPSPath(path, out provider, out drive));
+                        filePaths.Add(path);
                     }
                     // ensure that this path (or set of paths after wildcard expansion)
                     // is on the filesystem. A wildcard can never expand to span multiple providers.
+                    /*
                     if (Common.IsFileSystemPath(provider, path) == false) {
                         // no, so skip to next path in paths.
                         continue;
                     }
+                    */
                 }
 
                 // At this point, we have a list of paths on the filesystem, process each file. 
-                foreach (string filePath in filePaths) {
+                foreach (string filePath in filePaths)
+                {
                     // If the file does not exist display an error and return.
-                    if (!File.Exists(filePath)) {
-                        FileNotFoundException fileException = new FileNotFoundException("File not found", filePath);
-                        ErrorRecord fileNotFoundError = new ErrorRecord(fileException, "FileNotFound", ErrorCategory.ObjectNotFound, filePath);
-                        WriteError(fileNotFoundError);
-                        return;
+                    if (!File.Exists(filePath))
+                    {
+                        throw new FileNotFoundException("File not found", filePath);
                     }
 
                     // if the ItemPosition parameter is not in the correct format display an error and return
-                    if (!Common.IsItemLocationValid(this.itemPosition)) {
-                        ArgumentException argException = new ArgumentException("The -ItemPosition parameter does not appear to be in the correct format.", this.itemPosition);
-                        ErrorRecord parameterError = new ErrorRecord(argException, "ParameterNotValid", ErrorCategory.InvalidArgument, this.itemPosition);
-                        WriteError(parameterError);
-                        return;
+                    if (!Common.IsItemLocationValid(this.itemPosition))
+                    {
+                        throw new ArgumentException("The ItemPosition parameter does not appear to be in the correct format.");
                     }
 
                     // process the message
-                    try {
+                    try
+                    {
                         // assume the filter is true, until a failed match is found
                         this.filterConditionsMet = true;
                         // load the file into a HL7Message object for processing
                         string fileContents = File.ReadAllText(filePath, encoder);
                         HL7Message message = new HL7Message(fileContents);
                         // if a filter was supplied, evaluate if the file matches the filter condition
-                        if (this.filter != null) {
+                        if (this.filter != null)
+                        {
                             // check to see is all of the filter conditions are met (ie AND all filters supplied). 
-                            foreach (string currentFilter in this.filter) {
+                            foreach (string currentFilter in this.filter)
+                            {
                                 bool anyItemMatch = false;
                                 string filterItem = Common.GetFilterItem(currentFilter);
                                 string filterValue = Common.GetFilterValue(currentFilter);
                                 // for repeating fields, only one of the items returned has to match for the filter to be evaluated as true.
-                                foreach (string itemValue in message.GetHL7ItemValue(filterItem)) {
-                                    if (itemValue.ToUpper() == filterValue.ToUpper()) {
+                                foreach (string itemValue in message.GetHL7ItemValue(filterItem))
+                                {
+                                    if (itemValue.ToUpper() == filterValue.ToUpper())
+                                    {
                                         anyItemMatch = true;
                                     }
                                 }
                                 // if none of the repeating field items match, then fail the filter match for this file. 
-                                if (!anyItemMatch) {
+                                if (!anyItemMatch)
+                                {
                                     this.filterConditionsMet = false;
                                 }
                             }
                         }
 
                         // if the filter supplied matches this message (or no filter provided) then process the file to optain the HL7 item requested
-                        if (filterConditionsMet) {
+                        if (filterConditionsMet)
+                        {
                             List<HL7Item> hl7Items = message.GetHL7Item(itemPosition);
                             // if the hl7Items array is  empty, the item was not found in the message
-                            if (hl7Items.Count == 0) {
-                                WriteWarning("Item " + this.itemPosition + " not found in the message " + filePath);
+                            if (hl7Items.Count == 0)
+                            {
+                                Debug.WriteLine("Item " + this.itemPosition + " not found in the message " + filePath);
                             }
 
                             //  items were located in the message, so proceed with replacing the original value with the new value.
-                            else {
+                            else
+                            {
                                 // update all repeats/occurances of the specified item
-                                if (this.allrepeats) {
-                                    foreach (HL7Item item in hl7Items) {
+                                if (this.allrepeats)
+                                {
+                                    foreach (HL7Item item in hl7Items)
+                                    {
                                         // appeand the new value to the existing value of the item if -AppendToExistingValue switch is set
-                                        if (appendValue) {
+                                        if (appendValue)
+                                        {
                                             this.newValue = item.ToString() + this.newValue;
                                         }
                                         // update the item value
-                                        SetHL7ItemResult result = new SetHL7ItemResult(this.newValue, item.ToString(), filePath, this.itemPosition);
+                                        result.Add(new SetHL7ItemResult(this.newValue, item.ToString(), filePath, this.itemPosition));
                                         item.SetValueFromString(this.newValue);
-                                        WriteObject(result);
                                     }
                                 }
                                 // update only the first occurrance. This is the default action.
-                                else {
+                                else
+                                {
                                     // append the new value to the existing value of the item if -AppendToExistingValue switch is set
-                                    if (appendValue) {
+                                    if (appendValue)
+                                    {
                                         this.newValue = hl7Items.ElementAt(0).ToString() + this.newValue;
                                     }
                                     // update the item value
-                                    SetHL7ItemResult result = new SetHL7ItemResult(this.newValue, hl7Items.ElementAt(0).ToString(), filePath, this.itemPosition);
+                                    result.Add(new SetHL7ItemResult(this.newValue, hl7Items.ElementAt(0).ToString(), filePath, this.itemPosition));
                                     hl7Items.ElementAt(0).SetValueFromString(this.newValue);
-                                    WriteObject(result);
                                 }
                                 // Write changes to the file. Replace the segment delimeter <CR> with the system newline string as this is being written to a file.
-								string cr = ((char)0x0D).ToString();
-								string newline = System.Environment.NewLine;
-                                if (this.ShouldProcess(filePath, "Saving changes to file")) {
-                                    System.IO.File.WriteAllText(filePath, message.ToString().Replace(cr, newline), encoder);
-                                }
+                                string cr = ((char)0x0D).ToString();
+                                string newline = System.Environment.NewLine;
+
+                                System.IO.File.WriteAllText(filePath, message.ToString().Replace(cr, newline), encoder);
+
                             }
                         }
                     }
 
                     // if the file does not start with a MSH segment, the constructor will throw an exception. 
-                    catch (System.ArgumentException) {
-                        ArgumentException argException = new ArgumentException("The file does not appear to be a valid HL7 v2 message", filePath);
-                        ErrorRecord invalidFileError = new ErrorRecord(argException, "FileNotValid", ErrorCategory.InvalidData, filePath);
-                        WriteError(invalidFileError);
-                        return;
+                    catch (System.ArgumentException)
+                    {
+                        throw new ArgumentException("The file does not appear to be a valid HL7 v2 message");
                     }
                 }
             }
