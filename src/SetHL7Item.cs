@@ -9,7 +9,6 @@
  * 
  * Notes:       Implements the cmdlet to update the value of a specific item from a HL7 v2 message.
  * 
- *  rrr
  */
 
 namespace HL7Tools
@@ -33,7 +32,29 @@ namespace HL7Tools
         private bool appendValue = false;
         private string encoding = "UTF-8";
 
-        List<SetHL7ItemResult> result;
+        List<SetHL7ItemResult> result = new List<SetHL7ItemResult>();
+
+        public SetHL7Item(string[] Path, string ItemPosition, string Value, string[] Filter = null, string Encoding = "UTF-8", bool ExpandWildcards = false)
+        {
+       
+            this.paths = Path;
+            this.expandWildcards = ExpandWildcards;
+
+            this.ItemPosition = ItemPosition;
+            this.Value = Value;
+
+            if (Filter != null)
+            {
+                this.Filter = Filter;
+            } else
+            {
+                this.Filter = new string[] { };
+            }
+            
+            this.Encoding = Encoding;
+        }
+
+
 
         public string[] LiteralPath
         {
@@ -78,7 +99,7 @@ namespace HL7Tools
         /// <summary>
         /// get the HL7 item provided via the cmdlet parameter HL7ItemPosition
         /// </summary>
-        protected void ProcessRecord()
+        public void ProcessRecord()
         {
             // confirm the item location parameter is valid before processing any files
             if (!Common.IsHL7LocationStringValid(this.itemPosition))
@@ -127,10 +148,10 @@ namespace HL7Tools
                     if (expandWildcards)
                     {
                         // Turn *.txt into foo.txt,foo2.txt etc. If path is just "foo.txt," it will return unchanged. If the filepath expands into a directory ignore it.
-                        string filesDir = Path.GetDirectoryName(path) ?? throw new DirectoryNotFoundException();
+                        string filesDir = System.IO.Path.GetDirectoryName(path) ?? throw new DirectoryNotFoundException();
                         if (Directory.Exists(filesDir))
                         {
-                            filePaths.AddRange(Directory.GetFiles(filesDir, Path.GetFileName(path)));
+                            filePaths.AddRange(Directory.GetFiles(filesDir, System.IO.Path.GetFileName(path)));
                         }
                     }
                     else
