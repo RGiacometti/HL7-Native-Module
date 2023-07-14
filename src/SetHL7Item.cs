@@ -36,7 +36,7 @@ namespace HL7Tools
 
         public SetHL7Item(string[] Path, string ItemPosition, string Value, string[] Filter = null, string Encoding = "UTF-8", bool ExpandWildcards = false)
         {
-       
+
             this.paths = Path;
             this.expandWildcards = ExpandWildcards;
 
@@ -46,11 +46,12 @@ namespace HL7Tools
             if (Filter != null)
             {
                 this.Filter = Filter;
-            } else
+            }
+            else
             {
                 this.Filter = new string[] { };
             }
-            
+
             this.Encoding = Encoding;
         }
 
@@ -124,50 +125,9 @@ namespace HL7Tools
             // expand the file or directory information provided in the -Path or -LiteralPath parameters
             foreach (string path in paths)
             {
-                /*
-                // This will hold information about the provider containing the items that this path string might resolve to.                
-                ProviderInfo provider;
-
-                // This will be used by the method that processes literal paths
-                PSDriveInfo drive;
-                */
-
+ 
                 // this contains the paths to process for this iteration of the loop to resolve and optionally expand wildcards.
-                List<string> filePaths = new List<string>();
-
-                // if the path provided is a directory, expand the files in the directy and add these to the list.
-                if (Directory.Exists(path))
-                {
-                    filePaths.AddRange(Directory.GetFiles(path));
-                }
-
-                // not a directory, could be a wildcard or literal filepath 
-                else
-                {
-                    // expand wildcards. This assumes if the user listed a directory it is literal
-                    if (expandWildcards)
-                    {
-                        // Turn *.txt into foo.txt,foo2.txt etc. If path is just "foo.txt," it will return unchanged. If the filepath expands into a directory ignore it.
-                        string filesDir = System.IO.Path.GetDirectoryName(path) ?? throw new DirectoryNotFoundException();
-                        if (Directory.Exists(filesDir))
-                        {
-                            filePaths.AddRange(Directory.GetFiles(filesDir, System.IO.Path.GetFileName(path)));
-                        }
-                    }
-                    else
-                    {
-                        // no wildcards, so don't try to expand any * or ? symbols.                    
-                        filePaths.Add(path);
-                    }
-                    // ensure that this path (or set of paths after wildcard expansion)
-                    // is on the filesystem. A wildcard can never expand to span multiple providers.
-                    /*
-                    if (Common.IsFileSystemPath(provider, path) == false) {
-                        // no, so skip to next path in paths.
-                        continue;
-                    }
-                    */
-                }
+                List<string> filePaths = Common.GetFilesFromPath(path, expandWildcards);
 
                 // At this point, we have a list of paths on the filesystem, process each file. 
                 foreach (string filePath in filePaths)

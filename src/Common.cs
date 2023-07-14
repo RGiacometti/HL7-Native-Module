@@ -10,6 +10,8 @@
 
 namespace HL7Tools
 {
+    using System.Collections.Generic;
+    using System.IO;
     using System.Management.Automation;
     using System.Text.RegularExpressions;
     using Microsoft.PowerShell.Commands;
@@ -113,6 +115,40 @@ namespace HL7Tools
             else {
                 return null;
             }
+
+        }
+
+        public static List<string> GetFilesFromPath(string path, bool expandWildcards)
+        {
+            List<string> filePaths = new List<string>();
+
+            // if the path provided is a directory, expand the files in the directy and add these to the list.
+            if (Directory.Exists(path))
+            {
+                filePaths.AddRange(Directory.GetFiles(path));
+            }
+
+            // not a directory, could be a wildcard or literal filepath 
+            else
+            {
+                // expand wildcards. This assumes if the user listed a directory it is literal
+                if (expandWildcards)
+                {
+                    // Turn *.txt into foo.txt,foo2.txt etc. If path is just "foo.txt," it will return unchanged. If the filepath expands into a directory ignore it.
+                    string filesDir = System.IO.Path.GetDirectoryName(path) ?? throw new DirectoryNotFoundException();
+                    if (Directory.Exists(filesDir))
+                    {
+                        filePaths.AddRange(Directory.GetFiles(filesDir, System.IO.Path.GetFileName(path)));
+                    }
+                }
+                else
+                {
+                    // no wildcards, so don't try to expand any * or ? symbols.                    
+                    filePaths.Add(path);
+                }
+            }
+
+            return filePaths;
 
         }
     }
