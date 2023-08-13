@@ -22,6 +22,8 @@ namespace HL7Tools
     using System.Security.Authentication;
     using System.Security.Cryptography.X509Certificates;
     using System.Diagnostics;
+    using static System.Net.WebRequestMethods;
+    using System.Collections;
 
     public class SendHL7Message
     {
@@ -34,6 +36,8 @@ namespace HL7Tools
         private string encoding = "UTF-8";
         private bool useTls;
         private bool skipCertificateCheck = false;
+
+        private SendHL7MessageResult result;
 
 
         public SendHL7Message(string[] Path, string HostName, int Port, bool NoACK = false, bool ExpandWildcards = false, int Delay = 0, string Encoding = "UTF-8", bool UseTLS = false, bool SkipCertificateCheck = false)
@@ -120,7 +124,10 @@ namespace HL7Tools
             set { this.skipCertificateCheck = value; }
         }
 
-
+        public SendHL7MessageResult Result
+        {
+            get { return this.result; }
+        }
 
 
         /// <summary>
@@ -141,7 +148,7 @@ namespace HL7Tools
                     System.Diagnostics.Stopwatch timer = new System.Diagnostics.Stopwatch();
 
                     // confirm the file exists
-                    if (!File.Exists(filePath))
+                    if (!System.IO.File.Exists(filePath))
                     {
                         throw new FileNotFoundException("File not found", filePath);
                     }
@@ -153,7 +160,7 @@ namespace HL7Tools
                     try
                     {
                         // get the contents of the file
-                        string fileContents = File.ReadAllText(filePath);
+                        string fileContents = System.IO.File.ReadAllText(filePath);
 
                         // save the string as a HL7Message, this will validate the file is a HL7 v2 message.
                         HL7Message message = new HL7Message(fileContents);
@@ -176,7 +183,7 @@ namespace HL7Tools
 
                         // stop timing the operation, output the result object
                         timer.Stop();
-                        SendHL7MessageResult result = new SendHL7MessageResult("Successful", ackLines, DateTime.Now, message.ToString().Split((char)0x0D), this.hostname, this.port, filePath, timer.Elapsed.TotalMilliseconds / 1000);
+                        result = new SendHL7MessageResult("Successful", ackLines, DateTime.Now, message.ToString().Split((char)0x0D), this.hostname, this.port, filePath, timer.Elapsed.TotalMilliseconds / 1000);
                         // TODO WriteObject(result);
                         Debug.WriteLine("Closing TCP session\n");
                     }
@@ -184,12 +191,14 @@ namespace HL7Tools
                     catch (ArgumentException ae)
                     {
                         Debug.WriteLine($"Exception: {ae}");
-                        throw new ArgumentException("The file does not appear to be a valid HL7 v2 message", filePath);
+                        result = new SendHL7MessageResult("Error", new string[] { "File does not start with a MSH segment" }, DateTime.Now, null, this.hostname, this.port, filePath, timer.Elapsed.TotalMilliseconds / 1000);
+                        //throw new ArgumentException("The file does not appear to be a valid HL7 v2 message", filePath);
                     }
                     // catch failed TCP connections
                     catch (SocketException)
                     {
-                        throw new SocketException();
+                        result = new SendHL7MessageResult("Error", new string[] { "Failed TCP connections" }, DateTime.Now, null, this.hostname, this.port, filePath, timer.Elapsed.TotalMilliseconds / 1000);
+                        // throw new SocketException();
                     }
                     finally
                     {

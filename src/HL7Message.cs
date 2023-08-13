@@ -527,7 +527,7 @@ namespace HL7Tools
     /// <summary>
     /// Class representing a HL7 message. Items are treated as text only, no strict HL7 message schema
     /// </summary>
-    class HL7Message
+    public class HL7Message
     {
         private List<Segment> segments = new List<Segment>();
         private char fieldDelimeter;
@@ -607,10 +607,10 @@ namespace HL7Tools
         /// <summary>
         /// Gets a list of all Segments from the message
         /// </summary>
-        public List<Segment> Segments
-        {
-            get { return this.segments; }
-        }
+        //public List<Segment> Segments
+        //{
+        //    get { return this.segments; }
+        //}
 
         /// <summary>
         /// Gets or sets the segments contained in the message

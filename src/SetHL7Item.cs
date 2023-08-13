@@ -34,6 +34,8 @@ namespace HL7Tools
 
         List<SetHL7ItemResult> result = new List<SetHL7ItemResult>();
 
+    
+
         public SetHL7Item(string[] Path, string ItemPosition, string Value, string[] Filter = null, string Encoding = "UTF-8", bool ExpandWildcards = false)
         {
 
